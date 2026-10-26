@@ -1,0 +1,10 @@
+git checkout main
+git pull
+mkdir -p .github
+echo "* @cataUAM" > .github/CODEOWNERS
+git add .github/CODEOWNERS
+git commit -m "chore: agrega CODEOWNERS con la docente como revisora"
+git push
+git checkout develop
+git merge main
+git push
