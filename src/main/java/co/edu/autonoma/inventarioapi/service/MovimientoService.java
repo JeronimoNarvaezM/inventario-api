@@ -5,6 +5,7 @@ import co.edu.autonoma.inventarioapi.dto.MovimientoRequest;
 import co.edu.autonoma.inventarioapi.dto.MovimientoResponse;
 import co.edu.autonoma.inventarioapi.entity.MovimientoEntity;
 import co.edu.autonoma.inventarioapi.entity.ProductoEntity;
+import co.edu.autonoma.inventarioapi.entity.Rol;
 import co.edu.autonoma.inventarioapi.entity.TipoMovimiento;
 import co.edu.autonoma.inventarioapi.entity.UsuarioEntity;
 import co.edu.autonoma.inventarioapi.repository.MovimientoRepository;
@@ -25,6 +26,7 @@ public class MovimientoService {
     private final MovimientoRepository movimientoRepository;
     private final ProductoRepository productoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final AlertaService alertaService;
 
     @Transactional(readOnly = true)
     public List<MovimientoResponse> listarPorProducto(Long productoId) {
@@ -61,8 +63,11 @@ public class MovimientoService {
             );
         }
 
+        // Bloquea la fila del producto hasta terminar la transacción:
+        // si llegan dos salidas a la vez, la segunda espera a la primera
+        // y lee el stock ya actualizado (protege la RN-01)
         ProductoEntity producto = productoRepository
-                .findById(request.productoId())
+                .buscarParaActualizar(request.productoId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
@@ -70,6 +75,8 @@ public class MovimientoService {
                 .findById(request.usuarioId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        validarUsuario(usuario);
 
         if (!producto.isActivo()) {
             throw new ResponseStatusException(
@@ -123,7 +130,29 @@ public class MovimientoService {
 
         MovimientoEntity guardado = movimientoRepository.save(movimiento);
 
+        // Solo una salida puede dejar el stock bajo el umbral
+        if (request.tipo() == TipoMovimiento.SALIDA) {
+            alertaService.evaluarStock(producto);
+        }
+
         return convertirAResponse(guardado);
+    }
+
+    // Solo un usuario activo con rol AUXILIAR_BODEGA puede registrar movimientos
+    private void validarUsuario(UsuarioEntity usuario) {
+        if (!usuario.isActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "El usuario está inactivo y no puede registrar movimientos"
+            );
+        }
+
+        if (usuario.getRol() != Rol.AUXILIAR_BODEGA) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Solo un auxiliar de bodega puede registrar movimientos"
+            );
+        }
     }
 
     private MovimientoResponse convertirAResponse(
