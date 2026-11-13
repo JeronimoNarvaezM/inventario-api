@@ -9,4 +9,7 @@ public interface UsuarioRepository
         extends JpaRepository<UsuarioEntity, Long> {
 
     Optional<UsuarioEntity> findByCorreo(String correo);
+
+    // Para no permitir dos usuarios con el mismo correo
+    boolean existsByCorreoIgnoreCase(String correo);
 }

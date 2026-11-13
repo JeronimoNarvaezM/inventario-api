@@ -9,4 +9,7 @@ public interface CategoriaRepository
         extends JpaRepository<CategoriaEntity, Long> {
 
     Optional<CategoriaEntity> findByNombre(String nombre);
+
+    // Para no permitir dos categorías con el mismo nombre
+    boolean existsByNombreIgnoreCase(String nombre);
 }
